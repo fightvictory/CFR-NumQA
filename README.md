@@ -1,5 +1,7 @@
 # CFR-NumQA
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21436517.svg)](https://doi.org/10.5281/zenodo.21436517)
+
 **Chinese Financial Report Numerical QA** — a dataset and reproducible pipeline for
 studying and suppressing *numerical hallucination* in retrieval-augmented question
 answering over Chinese A-share annual reports.
@@ -137,7 +139,18 @@ platform.
 
 ## Citation
 
+If you use the dataset or code, please cite both the paper and the archived dataset:
+
 ```bibtex
+@dataset{cfr-numqa-data,
+  author    = {Wang, Jiakai},
+  title     = {{CFR-NumQA}: Chinese Financial Report Numerical QA},
+  publisher = {Zenodo},
+  version   = {v1.0.0},
+  year      = {2026},
+  doi       = {10.5281/zenodo.21436517}
+}
+
 @article{cfr-numqa,
   author  = {Wang, Jiakai},
   title   = {Mitigating Numerical Hallucination in Retrieval-Augmented Question
