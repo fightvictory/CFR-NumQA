@@ -1,0 +1,19 @@
+# Source PDFs are not redistributed (see README: use cninfo_downloader.py)
+data/raw_pdfs/
+data/szse_stock.json
+
+# Derived corpora — rebuild with: python build_corpus.py data/parsed/ -o data/corpus/
+data/corpus/
+
+# Model weights — see GitHub Release
+models/
+
+# Environments and caches
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Local logs and scratch
+*.log
+logs_archive/

@@ -1,0 +1,22 @@
+# Data construction (CPU only)
+requests
+pdfplumber
+openpyxl
+pymupdf
+
+# Retrieval
+sentence-transformers
+jieba
+rank_bm25
+numpy
+
+# Generation (GPU)
+vllm>=0.25.0
+torch
+
+# Verifier training (GPU)
+transformers
+peft
+bitsandbytes
+accelerate
+datasets
