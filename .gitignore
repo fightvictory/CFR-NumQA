@@ -17,3 +17,4 @@ __pycache__/
 # Local logs and scratch
 *.log
 logs_archive/
+verifier_lora_v1.0.0.zip
