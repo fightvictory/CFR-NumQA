@@ -18,3 +18,4 @@ __pycache__/
 *.log
 logs_archive/
 verifier_lora_v1.0.0.zip
+verifier_lora_v2.0.0.zip

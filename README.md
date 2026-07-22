@@ -97,10 +97,11 @@ python build_qa_seed.py data/parsed/ -o data/qa_seed.jsonl
 | `build_qa_seed.py` | Harvests facts and generates the three question types with provenance |
 | `run_e2e.py` | Retrieval + generation. Flags: `--hybrid` (BM25⊕dense RRF), `--filter-meta` (rule-parsed company/year filter), `--sub-quota` (per-entity evidence quota), `--calc` (tool contract for arithmetic and cross-unit comparison), `--auto-decompose` (non-oracle query decomposition) |
 | `run_baselines.py` | Closed-book, Self-RAG-lite, CRAG-lite baselines |
-| `run_api_baseline.py` | Frontier commercial model comparison via API |
+| `run_api_baseline.py` | Frontier commercial model baselines via API (`--provider minimax\|deepseek`) |
 | `build_verifier_data.py` | Constructs verifier supervision programmatically from observed error modes; splits **by company** |
 | `train_verifier.py` | QLoRA fine-tuning of the verifier (4-bit NF4 + LoRA r16, <2 h on one consumer GPU) |
 | `eval_verifier.py` | Verifier judgment metrics + end-to-end gating simulation |
+| `run_gates_v2.sh`, `run_gates_ds.sh` | Reproduce all gating runs for the V2 verifier and the commercial generators |
 | `eval_answers.py` | Accuracy / abstention / hallucination / grounded-error metrics |
 | `eval_context.py` | Evidence coverage (primary retrieval metric) |
 | `attribute_errors.py` | 14-way error attribution taxonomy |
@@ -117,20 +118,50 @@ Accuracy on 1,016 questions with a frozen Qwen2.5-7B-Instruct generator:
 | Naive-chunk RAG + tool | 30.3% | 30.1% | 3.6% |
 | Self-RAG-lite | 50.5% | 27.4% | 6.2% |
 | CRAG-lite | 54.8% | 18.0% | 9.2% |
-| Frontier commercial model, same naive pipeline | 44.8% | 40.1% | 2.0% |
+| MiniMax-M3, same naive pipeline | 44.8% | 40.1% | 2.0% |
+| DeepSeek-V4-Pro, same naive pipeline | 45.2% | 46.7% | 1.2% |
 | **This work (full pipeline)** | **64.5%** | 15.1% | **3.6%** |
+| MiniMax-M3 on our contexts | 67.6% | 25.5% | 0.6% |
+| DeepSeek-V4-Pro on our contexts | 66.6% | 28.1% | 0.4% |
 | **+ verifier gate** | **97.5%** answered accuracy | — | **0** |
 
-Gated answered accuracy stays at 97.5–98.4% for 7B, 14B and 32B generators, and
-holds on a frontier commercial generator from another vendor (`results/gate_m3_v3ctx.jsonl`:
-118/118 passed answers correct and fully evidence-backed): the verifier, not
-generator scale, sets the ceiling of system reliability.
+**The pipeline matters roughly an order of magnitude more than the generator.**
+Two frontier commercial reasoning models from different vendors gain +21.5 and
++22.8 points from swapping the retrieval pipeline, but only +2.2 and +3.1 points
+are gained by swapping our 7B open-weight generator for either of them at a fixed
+pipeline. Both vendors reproduce the ratio independently.
 
-The gate buys this precision with coverage, at a true false-block rate of
-20–26%. The cost is concentrated by question type — the supervision built by
-`build_verifier_data.py` contains no positive examples for cross-company
-comparison questions, so the verifier rejects that type wholesale. See the
-paper's Section 5.6 for the full accounting.
+Gated answered accuracy stays at 97.5–98.4% across 7B/14B/32B generators and on
+both commercial generators (`results/gate_m3_v3ctx.jsonl`, `results/gate_ds_v1.jsonl`:
+every passed answer correct and fully evidence-backed, zero hallucinations).
+
+### Verifier operating points
+
+The gate buys precision with coverage. `build_verifier_data.py` originally decided
+groundedness by checking that every gold *value* appears in the context — but a
+comparison question's gold answer is a company name, not a number, so the check
+returned an empty list and **every comparison question's correct answer entered
+training as a negative example** (89 negatives, 0 positives). The verifier learned
+to reject that question type wholesale. Deciding groundedness by evidence
+*provenance* instead repairs it:
+
+| | V1 (precision-first) | V2 (rebalanced) |
+|---|---|---|
+| Coverage (7B / 14B / 32B) | 53.6% / 55.4% / 55.8% | 62.5% / 63.4% / 63.4% |
+| Precision | 97.5% / 98.4% / 98.4% | 95.0% / 97.2% / 96.5% |
+| Comparison questions passed | 0% | 77–82% |
+| True false-block rate | 20.4–25.8% | 12.4–16.4% |
+
+Both hold zero hallucinations and 100% evidence coverage among passed answers.
+V1 ships as the default (`models/verifier_lora`, Release asset
+`verifier_lora_v1.0.0.zip`); V2 is `verifier_lora_v2.0.0.zip`. Rebuild either
+with `build_verifier_data.py` + `train_verifier.py`; reproduce the gates with
+`run_gates_v2.sh` / `run_gates_ds.sh`. See the paper's Section 5.6.
+
+The defect is invisible in aggregate judgment accuracy (V1 scores 97.3% while
+refusing an entire question type) and surfaces only in a per-question-type
+breakdown. Any groundedness gate built from programmatic supervision should be
+reported with such a breakdown.
 
 > **Note (2026-07-22).** `eval_answers.py::extract_number` previously took the
 > first number in a prediction, which mis-read the leading year in narrative

@@ -73,6 +73,31 @@ def gold_answer_str(rec):
     return rec["gold"]
 
 
+def _norm(s):
+    return re.sub(r"[（(].*?[)）]|\s", "", s or "")
+
+
+def evidence_present(rec, ctx_vals):
+    """gold证据是否完整进入上下文。
+
+    比较题的gold是公司名而非数值，gold_values() 对其返回空列表；若直接按数值
+    判定，整类比较题都会被标成"无依据"，其标准答案会被当作负例喂给校验器。
+    比较题改按 gold_evidence 溯源（源文件公司名 + 行标签）判定双侧证据。
+    """
+    if rec["type"] == "cross_company":
+        ev = rec.get("gold_evidence") or []
+        if not ev:
+            return False
+        return all(
+            any(e["source"].split("_")[1] in u["text"]
+                and _norm(e["row_label"])[:6] in _norm(u["text"])
+                for u in rec["retrieved"])
+            for e in ev
+        )
+    golds = gold_values(rec)
+    return bool(golds) and all(in_ctx(v, ctx_vals) for v in golds)
+
+
 def make_negatives(rec, ctx_vals):
     """按题型生成扰动负例（候选答案字符串, kind）。"""
     negs = []
@@ -139,8 +164,7 @@ def main():
         split = split_of(company)
         ctx = ctx_text(rec)
         cvals = ctx_values(rec)
-        golds = gold_values(rec)
-        grounded = bool(golds) and all(in_ctx(v, cvals) for v in golds)
+        grounded = evidence_present(rec, cvals)
 
         def emit(ans, label, kind):
             buckets[split].append({
