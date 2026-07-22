@@ -114,15 +114,30 @@ Accuracy on 1,016 questions with a frozen Qwen2.5-7B-Instruct generator:
 
 | System | Acc. | Abstain | Hallucination |
 |---|---|---|---|
-| Naive-chunk RAG + tool | 28.1% | 30.1% | 3.6% |
-| Self-RAG-lite | 49.1% | 27.4% | 6.2% |
-| CRAG-lite | 53.3% | 18.0% | 9.2% |
-| Frontier commercial model, same naive pipeline | 37.0% | 40.1% | 2.3% |
-| **This work (full pipeline)** | **63.3%** | 15.1% | **3.7%** |
+| Naive-chunk RAG + tool | 30.3% | 30.1% | 3.6% |
+| Self-RAG-lite | 50.5% | 27.4% | 6.2% |
+| CRAG-lite | 54.8% | 18.0% | 9.2% |
+| Frontier commercial model, same naive pipeline | 44.8% | 40.1% | 2.0% |
+| **This work (full pipeline)** | **64.5%** | 15.1% | **3.6%** |
 | **+ verifier gate** | **97.5%** answered accuracy | — | **0** |
 
-Gated answered accuracy stays at ≈98.4% for 7B, 14B and 32B generators: the
-verifier, not generator scale, sets the ceiling of system reliability.
+Gated answered accuracy stays at 97.5–98.4% for 7B, 14B and 32B generators, and
+holds on a frontier commercial generator from another vendor (`results/gate_m3_v3ctx.jsonl`:
+118/118 passed answers correct and fully evidence-backed): the verifier, not
+generator scale, sets the ceiling of system reliability.
+
+The gate buys this precision with coverage, at a true false-block rate of
+20–26%. The cost is concentrated by question type — the supervision built by
+`build_verifier_data.py` contains no positive examples for cross-company
+comparison questions, so the verifier rejects that type wholesale. See the
+paper's Section 5.6 for the full accounting.
+
+> **Note (2026-07-22).** `eval_answers.py::extract_number` previously took the
+> first number in a prediction, which mis-read the leading year in narrative
+> answers such as "…公司2023年度净利润为11,582,226,085.00元". Short-form outputs
+> were unaffected, but verbose ones (notably the commercial API baseline) were
+> systematically under-scored. The table above reflects the corrected scorer;
+> raw model outputs in `results/` are unchanged and can be re-scored.
 
 ## Data provenance and use
 

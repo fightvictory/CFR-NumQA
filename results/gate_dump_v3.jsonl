@@ -1,5 +1,5 @@
 {"id": "seed_0220", "type": "extraction", "question": "宁德时代2024年度的归母净利润是多少？", "gold": "50,744,682千元", "prediction": "50,744,682千元", "verdict": "支持", "correct": true, "grounded_pred": true}
-{"id": "seed_0221", "type": "extraction", "question": "宁德时代2023年度的归母净利润是多少？", "gold": "44,121,248千元", "prediction": "44,121,248 千元", "verdict": "不支持", "correct": false, "grounded_pred": true}
+{"id": "seed_0221", "type": "extraction", "question": "宁德时代2023年度的归母净利润是多少？", "gold": "44,121,248千元", "prediction": "44,121,248 千元", "verdict": "不支持", "correct": true, "grounded_pred": true}
 {"id": "seed_0224", "type": "extraction", "question": "宁德时代2024年度的基本每股收益是多少？", "gold": "11.58", "prediction": "11.58", "verdict": "支持", "correct": true, "grounded_pred": true}
 {"id": "seed_0225", "type": "extraction", "question": "宁德时代2023年度的基本每股收益是多少？", "gold": "10.06", "prediction": "10.06", "verdict": "支持", "correct": true, "grounded_pred": true}
 {"id": "seed_0230", "type": "extraction", "question": "迈瑞医疗2022年度的营业收入是多少？", "gold": "30,365,643,811.00元", "prediction": "30,365,643,811.00元", "verdict": "支持", "correct": true, "grounded_pred": true}
