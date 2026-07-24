@@ -19,3 +19,7 @@ __pycache__/
 logs_archive/
 verifier_lora_v1.0.0.zip
 verifier_lora_v2.0.0.zip
+
+# Embedding caches — regenerate with r15 scripts
+results/r15_emb*.npy
+data/r15_emb*.npy

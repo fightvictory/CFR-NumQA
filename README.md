@@ -97,11 +97,13 @@ python build_qa_seed.py data/parsed/ -o data/qa_seed.jsonl
 | `build_qa_seed.py` | Harvests facts and generates the three question types with provenance |
 | `run_e2e.py` | Retrieval + generation. Flags: `--hybrid` (BM25⊕dense RRF), `--filter-meta` (rule-parsed company/year filter), `--sub-quota` (per-entity evidence quota), `--calc` (tool contract for arithmetic and cross-unit comparison), `--auto-decompose` (non-oracle query decomposition) |
 | `run_baselines.py` | Closed-book, Self-RAG-lite, CRAG-lite baselines |
-| `run_api_baseline.py` | Frontier commercial model baselines via API (`--provider minimax\|deepseek`) |
+| `run_api_baseline.py` | Frontier commercial model baselines via API (`--provider glm\|openai\|minimax\|deepseek`; `--stratify` for typed pilots) |
 | `build_verifier_data.py` | Constructs verifier supervision programmatically from observed error modes; splits **by company** |
 | `train_verifier.py` | QLoRA fine-tuning of the verifier (4-bit NF4 + LoRA r16, <2 h on one consumer GPU) |
 | `eval_verifier.py` | Verifier judgment metrics + end-to-end gating simulation |
-| `run_gates_v2.sh`, `run_gates_ds.sh` | Reproduce all gating runs for the V2 verifier and the commercial generators |
+| `run_gates_v2.sh`, `run_gates_glm.sh`, `run_gates_gpt.sh` | Reproduce all gating runs for the V2 verifier and the commercial generators |
+| `make_synth_negs.py` | Perturb commercial models' correct answers with the eight error modes (transfer test at scale) |
+| `r15_valuelevel.py`, `r15_bge_large.py` | Vocabulary-overlap stratification of the retrieval gain and the bge-large robustness check |
 | `eval_answers.py` | Accuracy / abstention / hallucination / grounded-error metrics |
 | `eval_context.py` | Evidence coverage (primary retrieval metric) |
 | `attribute_errors.py` | 14-way error attribution taxonomy |
@@ -118,22 +120,33 @@ Accuracy on 1,016 questions with a frozen Qwen2.5-7B-Instruct generator:
 | Naive-chunk RAG + tool | 30.3% | 30.1% | 3.6% |
 | Self-RAG-lite | 50.5% | 27.4% | 6.2% |
 | CRAG-lite | 54.8% | 18.0% | 9.2% |
-| MiniMax-M3, same naive pipeline | 44.8% | 40.1% | 2.0% |
-| DeepSeek-V4-Pro, same naive pipeline | 45.2% | 46.7% | 1.2% |
+| GLM-5.2, same naive pipeline | 43.7% | 46.9% | 0.6% |
+| GPT-5.5, same naive pipeline | 49.5% | 45.0% | 1.2% |
 | **This work (full pipeline)** | **64.5%** | 15.1% | **3.6%** |
-| MiniMax-M3 on our contexts | 67.6% | 25.5% | 0.6% |
-| DeepSeek-V4-Pro on our contexts | 66.6% | 28.1% | 0.4% |
+| GLM-5.2 on our contexts | 66.2% | 28.8% | 0.5% |
+| GPT-5.5 on our contexts | 68.4% | 26.3% | 0.6% |
 | **+ verifier gate** | **97.5%** answered accuracy | — | **0** |
 
-**The pipeline matters roughly an order of magnitude more than the generator.**
-Two frontier commercial reasoning models from different vendors gain +21.5 and
-+22.8 points from swapping the retrieval pipeline, but only +2.2 and +3.1 points
-are gained by swapping our 7B open-weight generator for either of them at a fixed
-pipeline. Both vendors reproduce the ratio independently.
+**The pipeline matters several-fold more than the generator.** Two frontier
+commercial reasoning models from different vendors gain +22.5 and +18.9 points
+from swapping the retrieval pipeline, but only +1.8 and +3.9 points from swapping
+our 7B open-weight generator for either of them at a fixed pipeline. (We do not
+quote a precise ratio: the generator delta's confidence interval approaches zero,
+so any quotient is unstable.) A per-type reading matters here — a frontier model's
+flat closed-book-vs-naive accuracy hides a significant +7.6–13.1 pp retrieval gain
+on extraction and year-over-year questions, cancelled in aggregate by
+world-knowledge leakage on comparison questions.
 
 Gated answered accuracy stays at 97.5–98.4% across 7B/14B/32B generators and on
-both commercial generators (`results/gate_m3_v3ctx.jsonl`, `results/gate_ds_v1.jsonl`:
-every passed answer correct and fully evidence-backed, zero hallucinations).
+both commercial generators (`results/gate_glm_v1.jsonl`, `results/gate_gpt_v1.jsonl`:
+every passed answer correct and fully evidence-backed, zero hallucinations). To
+test error detection at scale rather than on the handful of natural errors these
+high-abstention models make, we perturbed their correct answers with the eight
+error modes and gated the results: the verifier rejects 96% of synthetic errors on
+both (`results/synthgate_*.jsonl`).
+
+The M3 and DeepSeek-V4-Pro runs from an earlier draft are retained under
+`results/answers_{m3,ds}_*.jsonl` and gave consistent conclusions.
 
 ### Verifier operating points
 
@@ -145,7 +158,7 @@ training as a negative example** (89 negatives, 0 positives). The verifier learn
 to reject that question type wholesale. Deciding groundedness by evidence
 *provenance* instead repairs it:
 
-| | V1 (precision-first) | V2 (rebalanced) |
+| | V1 (original labels) | V2 (repaired labels) |
 |---|---|---|
 | Coverage (7B / 14B / 32B) | 53.6% / 55.4% / 55.8% | 62.5% / 63.4% / 63.4% |
 | Precision | 97.5% / 98.4% / 98.4% | 95.0% / 97.2% / 96.5% |
