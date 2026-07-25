@@ -210,7 +210,7 @@ If you use the dataset or code, please cite both the paper and the archived data
 
 ```bibtex
 @dataset{cfr-numqa-data,
-  author    = {Wang, Jikui},
+  author    = {Wang, Jikui and Zhang, Guijie and Lu, Yang},
   title     = {{CFR-NumQA}: Chinese Financial Report Numerical QA},
   publisher = {Zenodo},
   version   = {v1.0.0},
@@ -219,7 +219,7 @@ If you use the dataset or code, please cite both the paper and the archived data
 }
 
 @article{cfr-numqa,
-  author  = {Wang, Jikui},
+  author  = {Wang, Jikui and Zhang, Guijie and Lu, Yang},
   title   = {Mitigating Numerical Hallucination in Retrieval-Augmented Question
              Answering over Chinese Financial Reports via Structure-Aware
              Retrieval and Lightweight Verification},
