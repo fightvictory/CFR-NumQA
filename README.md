@@ -194,7 +194,7 @@ platform.
 
 - **Code**: MIT License (see `LICENSE`)
 - **Derived data and annotations** (`data/qa_seed.jsonl`, `data/parsed/`, `results/`):
-  CC BY 4.0, for research use
+  CC BY 4.0 (see `LICENSE-DATA`)
 
 ## Citation
 
