@@ -11,7 +11,7 @@
       --model Qwen/Qwen2.5-7B-Instruct --lora models/verifier_lora
 
   # 端到端拦截模拟（对答案文件里test公司的真实预测做gate）
-  加 --gate data/answers_v2_structural_full.jsonl
+  加 --gate results/answers_v2_structural_full.jsonl
 
 指标：判定准确率 / 正例通过率 / 负例拦截率 / 分错误类型拦截率；
 gate模式：拦截前后 已答题准确率、幻觉率、有效拒答率。

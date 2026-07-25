@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 错误归因脚本：把答案文件中每条记录归入细分错误类别（无GPU也能跑）
-    python attribute_errors.py data/answers_structural.jsonl --dump
+    python attribute_errors.py results/answers_structural.jsonl --dump
 
 类别体系（论文错误分析表用）：
   correct              答对

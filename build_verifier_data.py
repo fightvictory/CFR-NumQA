@@ -20,7 +20,7 @@
 
 划分：按公司划分，test公司的所有样本不进train（防同报告泄漏）。
 用法：
-    python build_verifier_data.py data/answers_v2_structural_full.jsonl -o data/verifier/
+    python build_verifier_data.py results/answers_v2_structural_full.jsonl -o data/verifier/
 """
 import argparse
 import json

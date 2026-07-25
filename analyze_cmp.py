@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 跨公司对比题badcase分析：区分检索失败 vs 模型比较错误（含单位盲区检查）
-    python analyze_cmp.py data/answers_structural_unitfix_calc.jsonl
+    python analyze_cmp.py results/answers_structural_unitfix_calc.jsonl
 """
 import argparse
 import json

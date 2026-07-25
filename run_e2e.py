@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-端到端RAG问答脚本（训练机运行，需GPU）
+端到端RAG问答脚本（需GPU）
 流程：检索top-k -> 拼接上下文 -> vLLM本地生成 -> 保存答案（含检索溯源，供幻觉评测）
 
-用法（在 ~/finrag/pilot_toolkit 下）：
-    python run_e2e.py data/corpus/structural.jsonl data/qa_seed.jsonl -o data/answers_structural.jsonl
-    python run_e2e.py data/corpus/naive.jsonl      data/qa_seed.jsonl -o data/answers_naive.jsonl
+用法（在仓库根目录下）：
+    python run_e2e.py data/corpus/structural.jsonl data/qa_seed.jsonl -o results/answers_structural.jsonl
+    python run_e2e.py data/corpus/naive.jsonl      data/qa_seed.jsonl -o results/answers_naive.jsonl
 
 依赖：pip install vllm sentence-transformers jieba rank_bm25
 显存：Qwen2.5-7B-Instruct-AWQ 约需 6-7GB，加bge与KV cache，16GB足够

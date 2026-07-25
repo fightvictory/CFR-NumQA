@@ -101,7 +101,7 @@ python build_qa_seed.py data/parsed/ -o data/qa_seed.jsonl
 | `build_verifier_data.py` | Constructs verifier supervision programmatically from observed error modes; splits **by company** |
 | `train_verifier.py` | QLoRA fine-tuning of the verifier (4-bit NF4 + LoRA r16, <2 h on one consumer GPU) |
 | `eval_verifier.py` | Verifier judgment metrics + end-to-end gating simulation |
-| `run_gates_v2.sh`, `run_gates_glm.sh`, `run_gates_gpt.sh` | Reproduce all gating runs for the V2 verifier and the commercial generators |
+| `run_gates_v2.sh`, `run_gates_glm.sh`, `run_gates_gpt.sh`, `run_gates_ds.sh` | Reproduce all gating runs for the V2 verifier and the commercial generators |
 | `make_synth_negs.py` | Perturb commercial models' correct answers with the eight error modes (transfer test at scale) |
 | `r15_valuelevel.py`, `r15_bge_large.py` | Vocabulary-overlap stratification of the retrieval gain and the bge-large robustness check |
 | `eval_answers.py` | Accuracy / abstention / hallucination / grounded-error metrics |
@@ -166,10 +166,18 @@ to reject that question type wholesale. Deciding groundedness by evidence
 | True false-block rate | 20.4–25.8% | 12.4–16.4% |
 
 Both hold zero hallucinations and 100% evidence coverage among passed answers.
-V1 ships as the default (`models/verifier_lora`, Release asset
-`verifier_lora_v1.0.0.zip`); V2 is `verifier_lora_v2.0.0.zip`. Rebuild either
-with `build_verifier_data.py` + `train_verifier.py`; reproduce the gates with
-`run_gates_v2.sh` / `run_gates_ds.sh`. See the paper's Section 5.6.
+Both adapters are attached to the GitHub Release. Unzip either into `models/`
+to get the layout the scripts expect:
+
+```bash
+unzip verifier_lora_v1.0.0.zip -d models/   # -> models/verifier_lora     (V1)
+unzip verifier_lora_v2.0.0.zip -d models/   # -> models/verifier_lora_v2  (V2)
+```
+
+V1 is the default path in `eval_verifier.py` and `run_gates_v2.sh` uses V2, but
+`run_gates_{glm,gpt,ds}.sh` gate with both versions in turn — keep both
+unzipped to reproduce the V1/V2 comparison above. Rebuild either with
+`build_verifier_data.py` + `train_verifier.py`. See the paper's Section 5.6.
 
 The defect is invisible in aggregate judgment accuracy (V1 scores 97.3% while
 refusing an entire question type) and surfaces only in a per-question-type

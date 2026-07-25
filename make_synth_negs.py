@@ -14,7 +14,7 @@ from build_verifier_data import make_negatives, rec_company, TEST_COMPANIES
 
 def load(p): return [json.loads(l) for l in open(p, encoding="utf-8")]
 
-for tag, fn in [("glm","data/answers_glm_v3ctx.jsonl"),("gpt","data/answers_gpt_v3ctx.jsonl")]:
+for tag, fn in [("glm","results/answers_glm_v3ctx.jsonl"),("gpt","results/answers_gpt_v3ctx.jsonl")]:
     recs = load(fn)
     out = []
     for r in recs:

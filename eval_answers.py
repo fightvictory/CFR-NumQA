@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 答案评测脚本：准确率 + 数值幻觉率（无GPU也能跑）
-    python eval_answers.py data/answers_structural.jsonl
-    python eval_answers.py data/answers_naive.jsonl
+    python eval_answers.py results/answers_structural.jsonl
+    python eval_answers.py results/answers_naive.jsonl
 
 指标定义（对齐计划书5.4节）：
   Accuracy    答案正确（数值题：量纲归一后相对误差<0.5%；比较题：公司名正确）

@@ -11,7 +11,7 @@
 
 用法（训练机）：
   python run_baselines.py data/corpus/structural.jsonl data/qa_seed.jsonl \
-      --baseline selfrag -o data/answers_bl_selfrag.jsonl
+      --baseline selfrag -o results/answers_bl_selfrag.jsonl
 """
 import argparse
 import json

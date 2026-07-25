@@ -5,9 +5,9 @@
 复用已有检索上下文与评测口径，只把生成换成API调用；支持断点续传。
 
   export $(grep -v '^#' ~/.config/minimax.env | xargs)  # 或 source
-  python run_api_baseline.py closedbook -o data/answers_m3_closedbook.jsonl
-  python run_api_baseline.py naive      -o data/answers_m3_naive.jsonl
-  python run_api_baseline.py v3ctx     -o data/answers_m3_v3ctx.jsonl
+  python run_api_baseline.py closedbook -o results/answers_m3_closedbook.jsonl
+  python run_api_baseline.py naive      -o results/answers_m3_naive.jsonl
+  python run_api_baseline.py v3ctx     -o results/answers_m3_v3ctx.jsonl
 
 configs:
   closedbook  无检索闭卷
@@ -139,9 +139,9 @@ if __name__ == "__main__":
     args = ap.parse_args()
     init_provider(args.provider)
 
-    src = {"closedbook": "data/answers_v2_naive_calc.jsonl",
-           "naive": "data/answers_v2_naive_calc.jsonl",
-           "v3ctx": "data/answers_v3_full.jsonl"}[args.config]
+    src = {"closedbook": "results/answers_v2_naive_calc.jsonl",
+           "naive": "results/answers_v2_naive_calc.jsonl",
+           "v3ctx": "results/answers_v3_full.jsonl"}[args.config]
     recs = [json.loads(l) for l in open(src, encoding="utf-8")]
 
     out = Path(args.out)

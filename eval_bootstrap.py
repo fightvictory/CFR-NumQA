@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Bootstrap置信区间（论文统计严谨性用，无GPU纯本地计算）。
-  python eval_bootstrap.py data/answers_v3_full.jsonl [...]        # 各文件指标95%CI
+  python eval_bootstrap.py results/answers_v3_full.jsonl [...]        # 各文件指标95%CI
   python eval_bootstrap.py --diff A.jsonl B.jsonl                  # 配对差值CI（A-B）
 
 方法：对1016条问答做有放回重采样（B=10000），percentile法95%CI。
