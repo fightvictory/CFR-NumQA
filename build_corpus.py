@@ -60,7 +60,7 @@ def doc_context(doc):
     return f"【{company} {title}】"
 
 
-def naive_units(doc):
+def naive_units(doc, ctx_prefix=True):
     """整页内容（文本+表格拍平）拼接后固定长度切分——典型的结构无关做法。"""
     units = []
     for page in doc["pages"]:
@@ -71,7 +71,7 @@ def naive_units(doc):
             for r in t["rows"]:
                 parts.append(" ".join(c for c in r if c))
         full = "\n".join(parts)
-        ctx = doc_context(doc)
+        ctx = doc_context(doc) if ctx_prefix else ""
         i = 0
         while i < len(full):
             chunk = full[i:i + CHUNK_SIZE]
@@ -82,11 +82,12 @@ def naive_units(doc):
     return units
 
 
-def structural_units(doc, attach=True):
+def structural_units(doc, attach=True, ctx_prefix=True):
     """文本块 + 三元组各自成独立索引单元，表格保留语义坐标。
-    attach=False 时跳过 caption 单位回挂，用于该组件的消融（见 --no-unit-attach）。"""
+    attach=False 时跳过 caption 单位回挂，用于该组件的消融（见 --no-unit-attach）。
+    ctx_prefix=False 时不注入文档级上下文前缀（见 --no-doc-context）。"""
     units = []
-    ctx = doc_context(doc)
+    ctx = doc_context(doc) if ctx_prefix else ""
     for page in doc["pages"]:
         for b in page["text_blocks"]:
             units.append({"text": ctx + b, "source": doc["source"],
@@ -105,6 +106,8 @@ def main():
     ap.add_argument("-o", "--out", default="data/corpus")
     ap.add_argument("--no-unit-attach", action="store_true",
                     help="跳过 caption 单位回挂，用于该组件的全量消融")
+    ap.add_argument("--no-doc-context", action="store_true",
+                    help="不注入文档级上下文前缀（公司名+报告名），用于该组件的全量消融")
     args = ap.parse_args()
 
     out = Path(args.out)
@@ -112,10 +115,13 @@ def main():
     all_naive, all_struct = [], []
     for f in sorted(Path(args.parsed_dir).glob("*.json")):
         doc = json.loads(f.read_text(encoding="utf-8"))
-        all_naive.extend(naive_units(doc))
-        all_struct.extend(structural_units(doc, attach=not args.no_unit_attach))
+        all_naive.extend(naive_units(doc, ctx_prefix=not args.no_doc_context))
+        all_struct.extend(structural_units(doc, attach=not args.no_unit_attach,
+                                           ctx_prefix=not args.no_doc_context))
     if args.no_unit_attach:
         print("注意：已禁用 caption 单位回挂（消融模式）")
+    if args.no_doc_context:
+        print("注意：已禁用文档级上下文前缀（消融模式）")
 
     for name, units in [("naive", all_naive), ("structural", all_struct)]:
         p = out / f"{name}.jsonl"

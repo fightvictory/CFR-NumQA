@@ -65,13 +65,17 @@ def main():
     if args.diff:
         assert len(args.files) == 2
         (a1, b1, h1), (a2, b2, h2) = (boot_means(x, idx_sets) for x in inds)
-        for name, s1, s2 in [("准确率", a1, a2), ("拒答率", b1, b2), ("HAL", h1, h2)]:
+        # 点估计用实际观测差值，不用重采样均值。两者差约±0.05pp，但观测值可由
+        # 任何人从 results/*.jsonl 直接数出来，不依赖 B 与随机种子；重采样只用来
+        # 定 CI。（此处原先打印的是 sum(d)/len(d)，即重采样均值。）
+        for col, (name, s1, s2) in enumerate([("准确率", a1, a2),
+                                              ("拒答率", b1, b2),
+                                              ("HAL", h1, h2)]):
             d = [x - y for x, y in zip(s1, s2)]
             lo, hi = pct_ci(d)
-            point = sum(x[0] for x in inds[0]) / n - sum(x[0] for x in inds[1]) / n \
-                if name == "准确率" else sum(d) / len(d)
+            point = (sum(x[col] for x in inds[0]) - sum(x[col] for x in inds[1])) / n
             sig = "显著" if lo > 0 or hi < 0 else "不显著"
-            print(f"  Δ{name} = {sum(d)/len(d):+.1%}  95%CI [{lo:+.1%}, {hi:+.1%}]  {sig}")
+            print(f"  Δ{name} = {point:+.1%}  95%CI [{lo:+.1%}, {hi:+.1%}]  {sig}")
         return
 
     print(f"{'文件':<42} {'准确率[95%CI]':<24} {'拒答率':<22} {'HAL':<20}")

@@ -68,9 +68,13 @@ python eval_bootstrap.py results/answers_v3_full.jsonl        # 95% bootstrap CI
 python eval_bootstrap.py --diff results/answers_v3_full.jsonl \
                                 results/answers_bl_crag.jsonl # paired significance
 
-# 3. Re-check the caption-unit ablation (both arms ship, so no GPU needed)
+# 3. Re-check any of the three component ablations (all arms ship, no GPU needed)
 python eval_bootstrap.py --diff results/answers_abl_with.jsonl \
-                                results/answers_abl_nounit.jsonl
+                                results/answers_abl_nounit.jsonl   # caption unit
+python eval_bootstrap.py --diff results/answers_abl_with.jsonl \
+                                results/answers_abl_nodoc.jsonl    # document context
+python eval_bootstrap.py --diff results/answers_abl_with.jsonl \
+                                results/answers_abl_noquota.jsonl  # per-subquery quota
 ```
 
 To regenerate the ablation arms rather than re-score them, build the control
@@ -78,15 +82,26 @@ corpus with `--no-unit-attach` and run the pipeline over each corpus in turn
 (this part needs a GPU):
 
 ```bash
+# caption-unit re-attachment
 python build_corpus.py data/parsed/ -o data/corpus_nounit/ --no-unit-attach
 python run_e2e.py data/corpus_nounit/structural.jsonl data/qa_seed.jsonl \
     --calc --sub-quota --hybrid --filter-meta -o results/answers_abl_nounit.jsonl
+
+# document-context prefix
+python build_corpus.py data/parsed/ -o data/corpus_nodoc/ --no-doc-context
+python run_e2e.py data/corpus_nodoc/structural.jsonl data/qa_seed.jsonl \
+    --calc --sub-quota --hybrid --filter-meta -o results/answers_abl_nodoc.jsonl
+
+# per-subquery quota needs no rebuild -- just drop the flag
+python run_e2e.py data/corpus/structural.jsonl data/qa_seed.jsonl \
+    --calc --hybrid --filter-meta -o results/answers_abl_noquota.jsonl
 ```
 
-Both arms in `results/` were produced in one environment; the
-with-attachment arm reproduces `answers_v3_full.jsonl` accuracy exactly, so
-the two are directly comparable. Add `--limit N` to `run_e2e.py` to smoke-test
-the path on the first `N` questions before committing to a full run.
+All four arms in `results/` were produced in one environment, and
+`answers_abl_with.jsonl` — the shared baseline — reproduces
+`answers_v3_full.jsonl` accuracy exactly, so every arm is directly
+comparable. Add `--limit N` to `run_e2e.py` to smoke-test the path on the
+first `N` questions before committing to a full run.
 
 To reproduce generation you need a GPU:
 
@@ -112,7 +127,7 @@ python build_qa_seed.py data/parsed/ -o data/qa_seed.jsonl
 |---|---|
 | `cninfo_downloader.py` | Fetch annual-report PDFs from cninfo (with retry/resume) |
 | `report_parser.py` | Structure-aware parsing; emits text blocks, tables, and linearized triples |
-| `build_corpus.py` | Builds the structural corpus (with **caption-unit re-attachment**) and the naive-chunk control corpus. `--no-unit-attach` builds the ablation control that drops re-attachment only |
+| `build_corpus.py` | Builds the structural corpus (with **caption-unit re-attachment**) and the naive-chunk control corpus. `--no-unit-attach` and `--no-doc-context` build the ablation controls that drop caption-unit re-attachment or the document-context prefix, one at a time |
 | `build_qa_seed.py` | Harvests facts and generates the three question types with provenance |
 | `run_e2e.py` | Retrieval + generation. Flags: `--hybrid` (BM25⊕dense RRF), `--filter-meta` (rule-parsed company/year filter), `--sub-quota` (per-entity evidence quota), `--calc` (tool contract for arithmetic and cross-unit comparison), `--auto-decompose` (non-oracle query decomposition), `--limit N` (first `N` questions only, for smoke tests) |
 | `run_baselines.py` | Closed-book, Self-RAG-lite, CRAG-lite baselines |
