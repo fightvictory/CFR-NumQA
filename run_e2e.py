@@ -228,10 +228,14 @@ def main():
                     help="只做检索并写出上下文，不加载生成模型（检索消融用）")
     ap.add_argument("--auto-decompose", action="store_true",
                     help="多实体分解用规则解析问题文本（非oracle meta）")
+    ap.add_argument("--limit", type=int, default=0,
+                    help="只跑前N条问题（烟测/调试用，0=全部）")
     args = ap.parse_args()
 
     units = load_jsonl(args.corpus_file)
     qas = load_jsonl(args.qa_file)
+    if args.limit:
+        qas = qas[:args.limit]
     print(f"语料 {len(units)} units, 问答 {len(qas)} 条")
 
     print("构建检索索引...")

@@ -82,8 +82,9 @@ def naive_units(doc):
     return units
 
 
-def structural_units(doc):
-    """文本块 + 三元组各自成独立索引单元，表格保留语义坐标。"""
+def structural_units(doc, attach=True):
+    """文本块 + 三元组各自成独立索引单元，表格保留语义坐标。
+    attach=False 时跳过 caption 单位回挂，用于该组件的消融（见 --no-unit-attach）。"""
     units = []
     ctx = doc_context(doc)
     for page in doc["pages"]:
@@ -92,7 +93,8 @@ def structural_units(doc):
                           "page": page["page"], "table_id": None})
         for t in page["tables"]:
             for tri in t["linearized"]:
-                units.append({"text": ctx + attach_unit(tri), "source": doc["source"],
+                units.append({"text": ctx + (attach_unit(tri) if attach else tri),
+                              "source": doc["source"],
                               "page": page["page"], "table_id": t["table_id"]})
     return units
 
@@ -101,6 +103,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("parsed_dir")
     ap.add_argument("-o", "--out", default="data/corpus")
+    ap.add_argument("--no-unit-attach", action="store_true",
+                    help="跳过 caption 单位回挂，用于该组件的全量消融")
     args = ap.parse_args()
 
     out = Path(args.out)
@@ -109,7 +113,9 @@ def main():
     for f in sorted(Path(args.parsed_dir).glob("*.json")):
         doc = json.loads(f.read_text(encoding="utf-8"))
         all_naive.extend(naive_units(doc))
-        all_struct.extend(structural_units(doc))
+        all_struct.extend(structural_units(doc, attach=not args.no_unit_attach))
+    if args.no_unit_attach:
+        print("注意：已禁用 caption 单位回挂（消融模式）")
 
     for name, units in [("naive", all_naive), ("structural", all_struct)]:
         p = out / f"{name}.jsonl"
