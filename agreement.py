@@ -213,8 +213,9 @@ def main():
             print(f"  难例样本上两位标注者的 Cohen κ = {h1['kappa']:.2f}"
                   f"（答案正确性）/ {h2['kappa']:.2f}（问题无歧义性）" if h2 and h2["kappa"] is not None
                   else f"  难例样本 Cohen κ = {h1['kappa']:.2f}")
-        if m1:
-            print(f"  随机样本一致率 {m1['pa']*100:.0f}% / {m2['pa']*100:.0f}%")
+        parts = [f"{x['pa']*100:.0f}%" for x in (m1, m2) if x]
+        if parts:
+            print(f"  随机样本一致率 {' / '.join(parts)}")
     else:
         print("尚无已完成的判定——两位标注者填好黄色列后再运行本脚本。")
 

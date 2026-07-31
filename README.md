@@ -49,9 +49,14 @@ Each QA pair carries the evidence needed to audit it:
 ```
 
 Year-over-year growth rates are computed programmatically from their two operands,
-so every gold answer is machine-re-verifiable. A stratified sample of 100 pairs was
-audited against the source PDFs with an independent extraction engine and then
-reviewed by the author; all 100 passed value-level verification.
+so every gold answer is machine-re-verifiable. Evidence provenance is verified
+exhaustively over all 1,016 pairs (`verify_provenance.py`), and a stratified sample
+of 100 pairs plus 80 deliberately difficult ones was double-annotated for answer
+correctness and for whether the gold is the only defensible reading
+(`make_audit2.py`, `agreement.py`); the two annotators agree on every item of the
+difficult sample (Cohen's kappa = 1.00, n = 80). Eleven pairs admit a second
+defensible answer, mostly because a later filing restates the prior-year figure the
+gold was taken from.
 
 ## Quick start
 
