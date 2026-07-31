@@ -20,6 +20,7 @@ from pathlib import Path
 MODEL = "Qwen/Qwen2.5-7B-Instruct-AWQ"
 EMB_MODEL = "BAAI/bge-small-zh-v1.5"
 TOP_K = 5
+RERANK_POOL = 8      # 开重排时先取 k*8 个候选交给交叉编码器
 
 SYSTEM_PROMPT = (
     "你是严谨的财报问答助手。只能根据提供的资料回答问题，禁止使用资料以外的知识。"
@@ -126,7 +127,7 @@ def query_filter_mask(query, metas, companies_all, np):
     return mask
 
 
-def build_retriever(units, hybrid=False, filter_meta=False):
+def build_retriever(units, hybrid=False, filter_meta=False, rerank=None):
     from sentence_transformers import SentenceTransformer
     import numpy as np
     model = SentenceTransformer(EMB_MODEL)
@@ -143,7 +144,32 @@ def build_retriever(units, hybrid=False, filter_meta=False):
         print("构建BM25索引（jieba分词）...")
         bm25 = BM25Okapi([jieba.lcut(u["text"]) for u in units])
 
+    # 交叉编码器重排。审稿意见指出：论文自己算出检索是瓶颈（未答的 46.4% 中三分之二
+    # 丢在检索），四层里投在检索上的却只有一个 RRF；而我们对标的 metadata-driven RAG
+    # 也带 reranker。这里补上，先用 RRF 取更大的候选池，再由交叉编码器重排取前 k。
+    reranker = None
+    if rerank:
+        import torch
+        from transformers import AutoTokenizer, AutoModelForSequenceClassification
+        rtok = AutoTokenizer.from_pretrained(rerank)
+        rmod = AutoModelForSequenceClassification.from_pretrained(rerank).eval()
+        if torch.cuda.is_available():
+            rmod = rmod.half().cuda()
+
+        def reranker(query, cands, k):
+            pairs = [[query, c["text"]] for c in cands]
+            scores = []
+            with torch.no_grad():
+                for i in range(0, len(pairs), 64):
+                    b = rtok(pairs[i:i + 64], padding=True, truncation=True,
+                             max_length=512, return_tensors="pt")
+                    b = {kk: v.to(rmod.device) for kk, v in b.items()}
+                    scores += rmod(**b).logits.view(-1).float().cpu().tolist()
+            order = sorted(range(len(cands)), key=lambda i: -scores[i])[:k]
+            return [cands[i] for i in order]
+
     def search(query, k=TOP_K):
+        pool = k * RERANK_POOL if reranker else k
         q = model.encode(["为这个句子生成表示以用于检索相关文章：" + query],
                          normalize_embeddings=True)
         dense = (emb @ q.T).ravel()
@@ -151,8 +177,9 @@ def build_retriever(units, hybrid=False, filter_meta=False):
         if mask is not None:
             dense = np.where(mask, dense, -1e9)
         if bm25 is None:
-            idx = np.argsort(-dense)[:k]
-            return [units[i] for i in idx]
+            idx = np.argsort(-dense)[:pool]
+            cands = [units[i] for i in idx]
+            return reranker(query, cands, k) if reranker else cands
         # RRF融合：1/(60+rank_dense) + 1/(60+rank_bm25)
         import jieba
         bs = np.asarray(bm25.get_scores(jieba.lcut(query)))
@@ -161,8 +188,9 @@ def build_retriever(units, hybrid=False, filter_meta=False):
         r_d = np.empty(len(dense)); r_d[np.argsort(-dense)] = np.arange(len(dense))
         r_b = np.empty(len(bs)); r_b[np.argsort(-bs)] = np.arange(len(bs))
         rrf = 1 / (60 + r_d) + 1 / (60 + r_b)
-        idx = np.argsort(-rrf)[:k]
-        return [units[i] for i in idx]
+        idx = np.argsort(-rrf)[:pool]
+        cands = [units[i] for i in idx]
+        return reranker(query, cands, k) if reranker else cands
     return search
 
 
@@ -215,6 +243,9 @@ def main():
     ap.add_argument("qa_file")
     ap.add_argument("-o", "--out", required=True)
     ap.add_argument("--top-k", type=int, default=TOP_K)
+    ap.add_argument("--rerank", metavar="MODEL_PATH",
+                    help="交叉编码器重排模型路径（如 ~/models/bge-reranker-base），"
+                         "先取 k*8 候选再重排取前 k")
     ap.add_argument("--model", default=MODEL)
     ap.add_argument("--calc", action="store_true",
                     help="计算器增强：同比题模型只输出两个操作数，增长率由程序计算")
@@ -239,7 +270,8 @@ def main():
     print(f"语料 {len(units)} units, 问答 {len(qas)} 条")
 
     print("构建检索索引...")
-    search = build_retriever(units, hybrid=args.hybrid, filter_meta=args.filter_meta)
+    search = build_retriever(units, hybrid=args.hybrid, filter_meta=args.filter_meta,
+                             rerank=args.rerank)
     decomp_fn = None
     if args.auto_decompose:
         companies_all = sorted({m[0] for m in unit_meta(units)})
