@@ -23,3 +23,11 @@ verifier_lora_v2.0.0.zip
 # Embedding caches — regenerate with r15 scripts
 results/r15_emb*.npy
 data/r15_emb*.npy
+
+# Office 打开文档时生成的锁文件（曾被 git add -A 误收进仓库）
+~$*
+
+# 引用页抽取包：内容是源年报的页面，而源 PDF 本身按上面的规则不随仓库分发；
+# 需要时用 make_evidence_pack.py 重建
+引用页.pdf
+引用页索引.md
