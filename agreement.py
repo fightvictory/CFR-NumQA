@@ -4,7 +4,7 @@
 
 为什么同时报 kappa 和 AC1
 -------------------------
-本数据集的抽检判定极度偏斜——随机样本上两列几乎全是 ✓。在这种边缘分布下
+本数据集的抽检判定极度偏斜——随机样本上判定几乎全是 ✓。在这种边缘分布下
 Cohen's kappa 会塌陷（kappa 悖论：一致率 99%，kappa 却可能低到 0.4 甚至无定义），
 因为它把"两人都倾向于选同一个多数类"当成了偶然一致。Gwet's AC1 正是为这种情形
 设计的，对偏斜边缘分布稳健。
@@ -175,12 +175,12 @@ def main():
     print("标注一致性（两位标注者独立判定）\n")
     print("难例样本 —— 刻意挑选可争议条目，系数在此才有变异可衡量")
     h1 = report("难例", a_hard, b_hard, "H", "答案正确?")
-    h2 = report("难例", a_hard, b_hard, "I", "证据支持?")
+    h2 = report("难例", a_hard, b_hard, "I", "唯一合理答案?")
 
     if a_main and b_main:
         print("主样本 —— 分层随机 100 条，代表整体数据质量")
         m1 = report("主样本", a_main, b_main, "H", "答案正确?")
-        m2 = report("主样本", a_main, b_main, "I", "证据支持?")
+        m2 = report("主样本", a_main, b_main, "I", "唯一合理答案?")
     else:
         m1 = m2 = None
         print("主样本：标注者B 尚未填写（或找不到标注者A的首轮文件），跳过\n")
@@ -190,7 +190,7 @@ def main():
         print("可直接写进论文的一句：")
         if h1 and h1["kappa"] is not None:
             print(f"  难例样本上两位标注者的 Cohen κ = {h1['kappa']:.2f}"
-                  f"（答案正确性）/ {h2['kappa']:.2f}（证据支持性）" if h2 and h2["kappa"] is not None
+                  f"（答案正确性）/ {h2['kappa']:.2f}（问题无歧义性）" if h2 and h2["kappa"] is not None
                   else f"  难例样本 Cohen κ = {h1['kappa']:.2f}")
         if m1:
             print(f"  随机样本一致率 {m1['pa']*100:.0f}% / {m2['pa']*100:.0f}%")
