@@ -87,6 +87,37 @@ def evidence_text(qa, idx):
     return "\n".join(lines[:4]) or "（未匹配到三元组，请对照PDF核查）"
 
 
+def row_label(text):
+    body = text.split("]", 1)[1] if "]" in text else text
+    return body.split("|")[0].strip()
+
+
+def sibling_rows(qa, idx, limit=6):
+    """同一张表里口径相近的其他行，供判断「唯一合理答案?」。
+
+    歧义主要来自竞争性会计科目（归母净资产／所有者权益合计、营业收入／营业总收入）。
+    判断它需要看到同表还有哪些行，否则标注者只能去翻 860MB 的源 PDF。把这些行直接
+    摆出来，大部分歧义判断就能在表内完成。按与所问指标的字面重合度排序。"""
+    ind = str(qa.get("meta", {}).get("indicator", "")) or qa.get("question", "")
+    key_chars = set(re.sub(r"[0-9年度的是多少？\s]", "", ind))
+    cited = {ev.get("row_label", "") for ev in qa["evidence"]}
+    out, seen = [], set()
+    for ev in qa["evidence"]:
+        key = (ev["source"], ev["page"], ev.get("table_id"))
+        for u in idx.get(key, []):
+            rl = row_label(u["text"])
+            if not rl or rl in seen or rl in cited:
+                continue
+            overlap = len(key_chars & set(rl))
+            if overlap < 2:                       # 毫不相干的行不列
+                continue
+            val = u["text"].rsplit("=", 1)[-1].strip() if "=" in u["text"] else ""
+            seen.add(rl)
+            out.append((overlap, f"{rl} = {val}"))
+    out.sort(key=lambda x: -x[0])
+    return "\n".join(t for _, t in out[:limit]) or "（同表无口径相近的其他行）"
+
+
 def main_sample(qas):
     """复现首轮那 100 条（seed=42，分层 53/38/9），供两位标注者配对比较。"""
     rng = random.Random(42)
@@ -160,12 +191,13 @@ def build_sheet(ws, rows, idx, title, note):
     ws["A2"] = note
     ws["A2"].font = Font(name="Arial", size=10, color="666666")
     ws["A2"].alignment = wrap
-    ws.merge_cells("A1:J1")
-    ws.merge_cells("A2:J2")
+    ws.merge_cells("A1:K1")
+    ws.merge_cells("A2:K2")
     ws.row_dimensions[2].height = 96
 
     headers = ["序号", "ID", "题型", "问题", "标准答案", "证据原文（自动匹配）",
-               "来源（文件@页）", "答案正确?", "唯一合理答案?", "备注"]
+               "同表相近行（判歧义用）", "来源（文件@页）",
+               "答案正确?", "唯一合理答案?", "备注"]
     HDR = 3
     for c, h in enumerate(headers, 1):
         cell = ws.cell(row=HDR, column=c, value=h)
@@ -178,8 +210,9 @@ def build_sheet(ws, rows, idx, title, note):
                "164,699百万元",
                "【平安银行 2023年年度报告】[表:2.1 关键指标（货币单位：人民币百万元）] "
                "营业收入 | 2023年 = 164,699百万元",
+               "营业总收入 = 164,699百万元\n利息净收入 = 116,061百万元",
                "000001_平安银行_2023年年度报告.pdf @15", "✓", "✓",
-               "数值与原文一致；「营业收入」在该表中口径唯一"]
+               "数值与原文一致；该表虽有「营业总收入」，但本行两者同值，不构成歧义"]
     for c, v in enumerate(example, 1):
         cell = ws.cell(row=HDR + 1, column=c, value=v)
         cell.font = Font(name="Arial", size=10, italic=True, color="888888")
@@ -191,20 +224,20 @@ def build_sheet(ws, rows, idx, title, note):
         r = START + i
         src = "; ".join(sorted({f"{e['source']} @{e['page']}" for e in qa["evidence"]}))
         row = [i + 1, qa["id"], TYPE_CN[qa["type"]], qa["question"], qa["answer"],
-               evidence_text(qa, idx), src, "", "", ""]
+               evidence_text(qa, idx), sibling_rows(qa, idx), src, "", "", ""]
         for c, v in enumerate(row, 1):
             cell = ws.cell(row=r, column=c, value=v)
             cell.font = normal
             cell.border = thin
             cell.alignment = wrap
-        for c in (8, 9, 10):
+        for c in (9, 10, 11):
             ws.cell(row=r, column=c).fill = yellow
 
     dv = DataValidation(type="list", formula1='"✓,✗,存疑"', allow_blank=True)
     ws.add_data_validation(dv)
-    dv.add(f"H{START}:I{START + len(rows) - 1}")
+    dv.add(f"I{START}:J{START + len(rows) - 1}")
 
-    for c, w in enumerate([5, 10, 6, 34, 16, 55, 30, 9, 13, 22], 1):
+    for c, w in enumerate([5, 10, 6, 32, 16, 46, 40, 26, 9, 13, 22], 1):
         ws.column_dimensions[get_column_letter(c)].width = w
     ws.freeze_panes = f"A{START}"
     return START, START + len(rows) - 1
@@ -238,8 +271,9 @@ def main():
         "常见歧义来源：①指标口径（归母净资产／所有者权益合计、营业收入／营业总收入）；"
         "②合并报表与母公司报表；③上年数是追溯调整后还是原披露数；"
         "④同一年数字在本年报与次年年报的上年同期栏都出现，取哪一处。\n"
-        "注意这两列相互独立：答案可以完全正确，但问题本身有歧义（判 ✓ / ✗）。"
-        "证据原文列是自动匹配的 gold 三元组；表名若读不出计量单位，请对照原PDF确认量纲。")
+        "注意这两列相互独立：答案可以完全正确，但问题本身有歧义。\n"
+        "【同表相近行】列出了同一张表里口径相近的其他科目及其数值——判歧义时先看这一列，"
+        "多数情况无需打开源PDF。仅当表名读不出计量单位、或需确认上年数是否追溯调整时，才需对照原PDF。")
     HARD_NOTE = (NOTE + "\n本页刻意挑选了核验成本高或存在分歧风险的条目（证据跨表跨页、"
                  "单位由表名回挂、比率类指标等）。顺序已打散，判定时无需考虑它为何入选。")
 

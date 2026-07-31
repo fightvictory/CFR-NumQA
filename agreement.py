@@ -32,7 +32,10 @@ CATS = ("✓", "✗", "存疑")
 
 
 def read_sheet(path, sheet_name=None):
-    """读 xlsx 的一个页签，返回 {id: {"H":..., "I":..., "J":...}}。
+    """读 xlsx 的一个页签，返回 {id: {"答案正确?":..., "唯一合理答案?":..., "备注":...}}。
+
+    判定列按**表头文字**定位，不写死列字母：首轮表里判定在 H/I，加了「同表相近行」
+    一列后变成 I/J。写死字母的话，列一挪就会静默读到空值，一致率凭空变成 100%。
     只认第 5 行起的数据（第 3 行表头、第 4 行示例）。"""
     try:
         z = zipfile.ZipFile(path)
@@ -47,21 +50,34 @@ def read_sheet(path, sheet_name=None):
     else:
         return None
     root = ET.fromstring(z.read(f"xl/worksheets/sheet{i}.xml"))
-    out = {}
-    for r in root.findall(".//m:row", NS):
-        n = int(r.get("r", 0))
-        if n < 5:
-            continue
-        cells = {}
+
+    def cells_of(r):
+        d = {}
         for c in r.findall("m:c", NS):
             col = "".join(ch for ch in c.get("r", "") if ch.isalpha())
             t = c.find("m:is/m:t", NS)
             v = c.find("m:v", NS)
-            cells[col] = ((t.text if t is not None else
-                           (v.text if v is not None else "")) or "").strip()
-        qid = cells.get("B", "")
+            d[col] = ((t.text if t is not None else
+                       (v.text if v is not None else "")) or "").strip()
+        return d
+
+    rows = {int(r.get("r", 0)): cells_of(r) for r in root.findall(".//m:row", NS)}
+    hdr = rows.get(3, {})
+    pos = {v: k for k, v in hdr.items() if v}
+    if "ID" not in pos:
+        raise SystemExit(f"!! {path} 的「{sheet_name or '首页'}」找不到 ID 列；"
+                         f"实际表头：{sorted(hdr.values())}")
+    # 判定列有哪列取哪列。首轮的表是旧格式（「证据支持?」而非「唯一合理答案?」），
+    # 强求两者齐全会直接罢工，而它的「答案正确?」是可以配对的。
+    judged = [h for h in ("答案正确?", "唯一合理答案?", "证据支持?", "备注") if h in pos]
+
+    out = {}
+    for n, cells in rows.items():
+        if n < 5:
+            continue
+        qid = cells.get(pos["ID"], "")
         if qid.startswith("seed_"):
-            out[qid] = {k: cells.get(k, "") for k in ("H", "I", "J")}
+            out[qid] = {k: cells.get(pos[k], "") for k in judged}
     return out
 
 
@@ -111,8 +127,13 @@ def boot_ci(pairs, fn, cats, seed=42):
     return vals[int(0.025 * len(vals))], vals[int(0.975 * len(vals))]
 
 
-def report(label, a, b, col, colname):
+def report(label, a, b, col):
+    colname = col
     ids = sorted(set(a) & set(b))
+    if not ids or col not in next(iter(a.values())) or col not in next(iter(b.values())):
+        print(f"  {label} · {colname}: 一方的表里没有这一列，跳过"
+              f"（首轮抽检表是旧格式，未判过歧义）\n")
+        return None
     pairs = [(a[i][col], b[i][col]) for i in ids
              if a[i][col] and b[i][col]]
     if not pairs:
@@ -169,18 +190,18 @@ def main():
     if a_main and a_recheck:
         # 首轮标注针对的是修复前的数据，被修复过的条目以复核结果为准
         for i, v in a_recheck.items():
-            if v["H"] or v["I"]:
+            if any(v.get(k) for k in ("答案正确?", "唯一合理答案?")):
                 a_main[i] = v
 
     print("标注一致性（两位标注者独立判定）\n")
     print("难例样本 —— 刻意挑选可争议条目，系数在此才有变异可衡量")
-    h1 = report("难例", a_hard, b_hard, "H", "答案正确?")
-    h2 = report("难例", a_hard, b_hard, "I", "唯一合理答案?")
+    h1 = report("难例", a_hard, b_hard, "答案正确?")
+    h2 = report("难例", a_hard, b_hard, "唯一合理答案?")
 
     if a_main and b_main:
         print("主样本 —— 分层随机 100 条，代表整体数据质量")
-        m1 = report("主样本", a_main, b_main, "H", "答案正确?")
-        m2 = report("主样本", a_main, b_main, "I", "唯一合理答案?")
+        m1 = report("主样本", a_main, b_main, "答案正确?")
+        m2 = report("主样本", a_main, b_main, "唯一合理答案?")
     else:
         m1 = m2 = None
         print("主样本：标注者B 尚未填写（或找不到标注者A的首轮文件），跳过\n")
