@@ -200,11 +200,20 @@ to reject that question type wholesale. Deciding groundedness by evidence
 | | V1 (original labels) | V2 (repaired labels) |
 |---|---|---|
 | Coverage (7B / 14B / 32B) | 53.6% / 55.4% / 55.8% | 62.5% / 63.4% / 63.4% |
+| Judgment accuracy / positive pass | 94.0% / 72.7% | 95.0% / 87.1% |
 | Precision | 97.5% / 98.4% / 98.4% | 95.0% / 97.2% / 96.5% |
 | Comparison questions passed | 0% | 77–82% |
-| True false-block rate | 20.4–25.8% | 12.4–16.4% |
+| True false-block rate | 21.0–25.8% | 12.3–16.4% |
 
-Both hold zero hallucinations and 100% evidence coverage among passed answers.
+Both hold zero hallucinations. Reproduce the judgment rows with:
+
+```bash
+python eval_verifier.py data/verifier/test.jsonl --lora models/verifier_lora
+```
+
+The defaults are now the training-time setup (4-bit NF4 base via the `hf`
+backend). Passing `--model ...-AWQ` uses a *different* 4-bit scheme and silently
+lowers every metric by roughly 3.5 pp.
 Both adapters are attached to the GitHub Release. Unzip either into `models/`
 to get the layout the scripts expect:
 
@@ -218,7 +227,7 @@ V1 is the default path in `eval_verifier.py` and `run_gates_v2.sh` uses V2, but
 unzipped to reproduce the V1/V2 comparison above. Rebuild either with
 `build_verifier_data.py` + `train_verifier.py`. See the paper's Section 5.6.
 
-The defect is invisible in aggregate judgment accuracy (V1 scores 97.3% while
+The defect is invisible in aggregate judgment accuracy (V1 scores 94.0% while
 refusing an entire question type) and surfaces only in a per-question-type
 breakdown. Any groundedness gate built from programmatic supervision should be
 reported with such a breakdown.

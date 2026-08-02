@@ -68,11 +68,68 @@ def is_correct(rec):
     return abs(pv - gv) / abs(gv) < 0.005
 
 
+# 长上下文实验的上下文就是整份年报（约 7.5 万字符）。若把它逐条写进结果文件，
+# 同一份报告会被上千条记录重复存储，两个文件合计 553 MB——超过 GitHub 单文件
+# 100 MB 上限，读者也得为核对一个数字下几百兆。因此这类记录只存文档标识，
+# 上下文在评测时从 data/parsed/ 确定性重建。缓存按文档，重建一次即可。
+_CTX_CACHE = {}
+
+
+def _render_parsed(stem):
+    """把解析后的年报渲染成线性文本。必须与 run_longctx.render_report 逐字一致，
+    否则重建出的数值集合与原始运行不同，HAL 与 grounded 判定就会漂移。"""
+    import os
+    if stem not in _CTX_CACHE:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "data", "parsed", stem + ".json")
+        if not os.path.exists(path):
+            _CTX_CACHE[stem] = None
+        else:
+            doc = json.load(open(path, encoding="utf-8"))
+            out = [f"===== {doc['source']} ====="]
+            for pg in doc["pages"]:
+                out.append(f"\n--- 第 {pg['page']} 页 ---")
+                for b in pg["text_blocks"]:
+                    out.append(b)
+                for t in pg["tables"]:
+                    cap = t.get("caption_guess") or "(无表名)"
+                    out.append(f"[表格 {t['table_id']}] {cap}")
+                    if t["header"]:
+                        out.append(" | ".join(t["header"]))
+                    for r in t["rows"]:
+                        if any(r):
+                            out.append(" | ".join(r))
+            _CTX_CACHE[stem] = "\n".join(out)
+    return _CTX_CACHE[stem]
+
+
+def _unit_text(u):
+    """取该检索单元的文本；缺 text 时按 source 从 data/parsed/ 重建。
+
+    重建失败必须硬失败。返回空串会让「上下文里没有任何数字」，于是所有答案
+    都被判为无依据——准确率不受影响，幻觉率却会被显著抬高（实测 0.8% -> 5.8%），
+    而且不报任何错。下载不完整的读者会得到错的数字并以为我们复现不了。
+    """
+    if "text" in u:
+        return u["text"]
+    stem = u.get("source", "")
+    if stem.endswith(".pdf"):
+        stem = stem[:-4]
+    t = _render_parsed(stem)
+    if t is None:
+        raise FileNotFoundError(
+            f"缺 data/parsed/{stem}.json，无法重建检索上下文。\n"
+            f"长上下文实验的结果文件只存文档标识（整份年报逐条存会超 GitHub "
+            f"单文件上限），评测时需要 data/parsed/ 才能还原。\n"
+            f"请确认仓库完整检出，或从 Zenodo 归档获取 data/parsed/。")
+    return t
+
+
 def numbers_in_context(rec):
     """检索资料中出现的所有数值（原始字符串规格化）。"""
     nums = set()
     for u in rec["retrieved"]:
-        for m in NUM_RE.finditer(u["text"]):
+        for m in NUM_RE.finditer(_unit_text(u)):
             s = m.group().replace(",", "")
             if len(s.replace(".", "").replace("-", "")) >= 3:  # 忽略页码等短数字
                 nums.add(s)

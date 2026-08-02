@@ -191,18 +191,42 @@ def build_retriever(units, hybrid=False, filter_meta=False, rerank=None):
         idx = np.argsort(-rrf)[:pool]
         cands = [units[i] for i in idx]
         return reranker(query, cands, k) if reranker else cands
+
+    def to_cpu():
+        """把查询编码器挪到 CPU，腾显存给 vLLM，同时保留 search 可用。
+        run_e2e 自己不需要（检索一次跑完就 del search），但 CRAG 基线在生成阶段
+        还要用改写后的查询再检索一次，不能直接删。语料向量已是 numpy，不受影响。"""
+        model.to("cpu")
+        import gc
+        import torch
+        gc.collect()
+        torch.cuda.empty_cache()
+    search.to_cpu = to_cpu
     return search
 
 
+# 子查询分解的粒度。默认 "entity"：只拆多公司题，与已发表结果一致。
+# "entity+period" 额外把同比题按年份拆开——失败归因（2026-08-01）显示同比题
+# 最大的单一失败模式是「只找到一个操作数」（109/183 = 60%），而按实体拆的配额
+# 从来作用不到它身上（同比题只有一个 company，len(companies) < 2 直接返回原句），
+# 这也是配额消融里单实体题逐字不变的原因。
+DECOMP_MODE = "entity"
+
+
 def decompose(qa):
-    """与eval_retrieval.py一致的oracle实体分解（多实体题拆子查询）。"""
+    """oracle 子查询分解。与 eval_retrieval.py 一致。"""
     m = qa.get("meta", {})
     companies = m.get("companies") or []
-    if len(companies) < 2:
-        return [qa["question"]]
-    ind = m.get("indicator", "")
-    year = m.get("year", "")
-    return [f"{c}{year}年{ind}" for c in companies]
+    if len(companies) >= 2:
+        ind = m.get("indicator", "")
+        year = m.get("year", "")
+        return [f"{c}{year}年{ind}" for c in companies]
+    years = m.get("years") or []
+    if DECOMP_MODE == "entity+period" and len(years) >= 2:
+        comp = m.get("company", "")
+        ind = m.get("indicator", "")
+        return [f"{comp}{y}年{ind}" for y in years]
+    return [qa["question"]]
 
 
 def decompose_auto(qa, companies_all):
@@ -249,6 +273,8 @@ def main():
     ap.add_argument("--model", default=MODEL)
     ap.add_argument("--calc", action="store_true",
                     help="计算器增强：同比题模型只输出两个操作数，增长率由程序计算")
+    ap.add_argument("--decomp", choices=["entity", "entity+period"], default="entity",
+                    help="子查询分解粒度；entity+period 额外按年份拆同比题")
     ap.add_argument("--sub-quota", action="store_true",
                     help="多实体题每个子查询保留各自top-k，不合并截断")
     ap.add_argument("--filter-meta", action="store_true",
@@ -263,6 +289,8 @@ def main():
                     help="只跑前N条问题（烟测/调试用，0=全部）")
     args = ap.parse_args()
 
+    global DECOMP_MODE
+    DECOMP_MODE = args.decomp
     units = load_jsonl(args.corpus_file)
     qas = load_jsonl(args.qa_file)
     if args.limit:

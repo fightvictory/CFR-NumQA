@@ -6,19 +6,26 @@
   selfrag     Self-RAG风格：生成 -> 同模型自反思"是否被资料支持" -> 不支持则拒答
   crag        Corrective RAG风格：检索质量评估 -> 不充分则LLM改写查询重检 -> 合并再生成
 
-统一使用 structural 语料 + 稠密检索 + oracle分解（与主方法检索起点对齐，
-对比的是幻觉抑制机制本身）。输出schema与run_e2e一致，eval_answers/attribute_errors直接可用。
+默认：structural 语料 + 稠密检索 + oracle分解（每子查询各自top-k，等价于sub-quota）。
+加 --hybrid/--filter-meta 后改走 run_e2e 的同一套检索栈，用于「检索配置对等」的
+对照臂——外审指出原配置下 +9.7pp 里有一部分是在测 hybrid 检索而非 corrective RAG
+本身的弱点。默认行为不变，已发表的两个基线仍可原样复现。
+输出schema与run_e2e一致，eval_answers/attribute_errors直接可用。
 
 用法（训练机）：
   python run_baselines.py data/corpus/structural.jsonl data/qa_seed.jsonl \
       --baseline selfrag -o results/answers_bl_selfrag.jsonl
+  # 检索配置与 v3 对等的对照臂
+  python run_baselines.py data/corpus/structural.jsonl data/qa_seed.jsonl \
+      --baseline selfrag --hybrid --filter-meta \
+      -o results/answers_bl_selfrag_v3cfg.jsonl
 """
 import argparse
 import json
 from pathlib import Path
 
 from run_e2e import (MODEL, EMB_MODEL, SYSTEM_PROMPT, TOP_K,
-                     load_jsonl, decompose)
+                     load_jsonl, decompose, build_retriever, retrieve_context)
 
 REFLECT_PROMPT = (
     "资料：\n{ctx}\n\n问题：{q}\n候选回答：{a}\n\n"
@@ -96,7 +103,12 @@ def main():
                     choices=["closedbook", "selfrag", "crag"])
     ap.add_argument("-o", "--out", required=True)
     ap.add_argument("--model", default=MODEL)
+    ap.add_argument("--hybrid", action="store_true",
+                    help="改用 run_e2e 的 BM25+稠密 RRF 混合检索（配置对等对照臂）")
+    ap.add_argument("--filter-meta", action="store_true",
+                    help="改用 run_e2e 的规则解析公司/年份过滤（配置对等对照臂）")
     args = ap.parse_args()
+    parity = args.hybrid or args.filter_meta
 
     qas = load_jsonl(args.qa_file)
     ABSTAIN = "无法从资料中确定。"
@@ -106,8 +118,16 @@ def main():
     if args.baseline != "closedbook":
         units = load_jsonl(args.corpus_file)
         print(f"语料 {len(units)} units")
-        search = build_dense_retriever(units)
-        contexts = [retrieve(search, qa) for qa in qas]
+        if parity:
+            # 与 run_e2e 同一套检索栈，首轮检索逐位一致（含查询编码在 GPU 上）
+            search = build_retriever(units, hybrid=args.hybrid,
+                                     filter_meta=args.filter_meta)
+            contexts = [retrieve_context(search, qa, TOP_K, sub_quota=True)
+                        for qa in qas]
+            search.to_cpu()      # 腾显存给 vLLM；CRAG 改写后的二次检索仍可用
+        else:
+            search = build_dense_retriever(units)
+            contexts = [retrieve(search, qa) for qa in qas]
 
     from vllm import LLM
     llm = LLM(model=args.model, max_model_len=4096, gpu_memory_utilization=0.8)

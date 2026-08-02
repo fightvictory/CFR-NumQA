@@ -41,8 +41,15 @@ def run_llm(prompts, args):
     kw = {}
     if args.lora:
         kw = {"enable_lora": True, "max_lora_rank": 16}
+    # 非量化 7B 权重 14.19 GiB，16 GiB 卡上 0.85 利用率留不出 KV cache（引擎启动即失败）。
+    # 而适配器的 adapter_config 记录的基座正是非量化版；用 -AWQ 会让全部指标偏低
+    # 约 3.5 pp（2026-08-01 实测），所以不能退回量化版了事——提高利用率才是正解。
+    # enforce_eager：非量化基座下 torch inductor 的自动调优还要额外 1 GiB，
+    # 14.19 GiB 权重 + 15.54 GiB 卡腾不出来。关掉图编译换取显存；本评测仅
+    # 715 条，慢一点无所谓。
     llm = LLM(model=args.model, max_model_len=2560,
-              gpu_memory_utilization=0.85, **kw)
+              gpu_memory_utilization=args.gpu_util,
+              enforce_eager=args.eager, **kw)
     sp = SamplingParams(temperature=0.0, max_tokens=8)
     convs = [[{"role": "user", "content": p}] for p in prompts]
     if args.lora:
@@ -95,10 +102,19 @@ def run_hf(prompts, args):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("test_file")
-    ap.add_argument("--model", default="Qwen/Qwen2.5-7B-Instruct-AWQ")
+    # 默认基座必须与训练一致：适配器是 QLoRA 在 4bit NF4 上训的（--backend hf 那条
+    # 路径）。先前默认 -AWQ 是另一种 4bit 方案，全部指标偏低约 3.5 pp 且不报任何错，
+    # 照默认参数复现的人会以为论文数字造假（2026-08-01 实测发现）。
+    ap.add_argument("--model", default="Qwen/Qwen2.5-7B-Instruct")
     ap.add_argument("--lora", default=None)
     ap.add_argument("--gate", default=None, help="答案文件：对test公司真实预测做拦截模拟")
-    ap.add_argument("--backend", choices=["vllm", "hf"], default="vllm")
+    ap.add_argument("--gpu-util", type=float, default=0.85,
+                    help="显存利用率；非量化基座在 16 GiB 卡上需 0.93 以上")
+    ap.add_argument("--eager", action="store_true",
+                    help="关闭 CUDA 图/编译以省显存；非量化基座在 16 GiB 卡上必需")
+    ap.add_argument("--backend", choices=["vllm", "hf"], default="hf")
+    ap.add_argument("--dump-test", default=None,
+                    help="把测试集判定明细写入 jsonl，供 tab:verifier 正面对账")
     ap.add_argument("--dump-gate", default=None, help="把gate明细写入jsonl（含verdict/correct/grounded）")
     args = ap.parse_args()
 
@@ -123,6 +139,13 @@ def main():
     if n == 0:
         pass
     else:
+        if args.dump_test:
+            with open(args.dump_test, "w", encoding="utf-8") as fh:
+                for r, v in zip(rows, v_test):
+                    fh.write(json.dumps({
+                        "qa_id": r.get("qa_id"), "type": r.get("type"),
+                        "kind": r.get("kind"), "label": r["label"], "verdict": v,
+                    }, ensure_ascii=False) + "\n")
         _report_cls(rows, v_test, args)
 
     # ---- 端到端拦截模拟 ----
