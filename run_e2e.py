@@ -106,10 +106,44 @@ def unit_meta(units):
     return metas
 
 
+# 公司名归一化开关。**默认 False，以匹配已发表的数字。**
+#
+# 置 True 会改变 40/1016 题的文档选择——全部是万科A，因为语料里它有「万科A」
+# 和「万  科Ａ」两种写法（27 个公司名归一化后只有 26 个）。已发表结果是在
+# False 下跑的，改成 True 而不重跑 13 个用了 --filter-meta 的臂，数字就会与
+# 代码分家。
+#
+# 但这确实是个 bug：2026-08-02 的改写问句实验里，五粮液的 5 道题因为语料写法
+# 是「五 粮 液」（来自 PDF 文件名）而自然提问写「五粮液」，裸子串匹配失效，
+# 退回全库 103 份年报，上下文超出模型窗口而失败。模板问句照抄了语料写法所以
+# 一直没暴露；真实用户不会照抄。
+#
+# 启用前请重跑全部 --filter-meta 的臂，并同步更新论文数字。
+NORM_COMPANY = False
+
+
+def norm_company(s):
+    """公司名归一化：全角转半角、去掉所有空白。
+
+    语料里的公司名来自 PDF 文件名，含「五 粮 液」「万  科Ａ」这类带空格或全角
+    字母的写法。原先按裸子串匹配（c in query），只有在提问时一字不差照抄这些
+    写法才命中——模板问句照抄了，所以一直没暴露；2026-08-02 用自然语言改写的
+    问句一测就露馅：五粮液的 5 道题解析不出公司，退回全库 103 份年报，上下文
+    超出模型窗口而失败。真实用户不会照抄语料的写法。
+    顺带：27 个公司名归一化后是 26 个——万科A 本来就有两种写法。
+    """
+    import unicodedata
+    return re.sub(r"\s+", "", unicodedata.normalize("NFKC", s))
+
+
 def query_filter_mask(query, metas, companies_all, np):
     """规则解析查询中的公司与年份（非oracle），返回候选池布尔掩码。
     年份y的数据也出现在y+1年报的同比列，故允许{y, y+1}。"""
-    comps = [c for c in companies_all if c in query]
+    if NORM_COMPANY:
+        nq = norm_company(query)
+        comps = [c for c in companies_all if norm_company(c) in nq]
+    else:
+        comps = [c for c in companies_all if c in query]
     years = set()
     for y in YEAR_RE.findall(query):
         years.add(int(y))

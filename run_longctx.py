@@ -103,7 +103,14 @@ def docs_for(qa, mode="oracle"):
     docs = _all_docs()
     q = qa["question"]
     comps_all = sorted({v[0] for v in docs.values()})
-    cs = [c for c in comps_all if c in q]
+    # 与 run_e2e.query_filter_mask 共用同一个开关与同一个归一化函数，不各写
+    # 一份——今天已因「两份实现分家」栽过（渲染函数、行标签正则）。
+    from run_e2e import NORM_COMPANY, norm_company
+    if NORM_COMPANY:
+        nq = norm_company(q)
+        cs = [c for c in comps_all if norm_company(c) in nq]
+    else:
+        cs = [c for c in comps_all if c in q]
     ys = set()
     for y in YEAR_RE.findall(q):
         ys.add(int(y))
