@@ -61,6 +61,25 @@ def gold_values(rec):
     return [g] if g is not None else []
 
 
+def gold_operands(rec):
+    """答案所依据的**全部**操作数，跨题型统一口径。
+
+    与 gold_values() 的区别只在跨公司题：那类的 gold 是公司名，gold_values()
+    取不到数值而返回空列表，于是「证据是否齐全」空真成立。论文里 §RQ2 报告
+    「放行答案中证据完整者」用的是本函数——两家公司的被比较值都必须在上下文里。
+    两个口径混用会得到 96.2% 与 100% 两个互相矛盾的说法（2026-08-03 发现）。
+    """
+    m = rec.get("meta", {})
+    if rec["type"] == "yoy_compare":
+        return [float(v) for v in m.get("values", [])]
+    if rec["type"] == "cross_company":
+        return [float(v) for v in m.get("values_yuan", [])]
+    if m.get("value") is not None:
+        return [float(m["value"])]
+    g = extract_number(rec["gold"])
+    return [g] if g is not None else []
+
+
 def pred_percent(rec):
     """按eval_answers同款逻辑解析预测百分数（含'下降'语义取负）。"""
     p = extract_number(rec["prediction"])
