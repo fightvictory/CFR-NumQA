@@ -171,8 +171,11 @@ def report(label, a, b, col):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--a", default="抽检表_标注者A.xlsx")
-    ap.add_argument("--b", default="抽检表_标注者B.xlsx")
+    # 默认指向**已填**的表。先前默认是空白模板，照着 README 直接跑会得到
+    # 「尚无已完成的判定」，看起来像标注数据没随仓库发布——而四个表都在库里。
+    # κ=1.00 是外审必做项，不该因为一个默认值而显得不可复现（2026-08-03 修）。
+    ap.add_argument("--a", default="抽检表_标注者A_已填.xlsx")
+    ap.add_argument("--b", default="抽检表_标注者B_已填.xlsx")
     ap.add_argument("--a-main", default="../pilot_toolkit/抽检表_人工校验100条_预审版.xlsx",
                     help="标注者A首轮的主样本标注（单页签）")
     args = ap.parse_args()
